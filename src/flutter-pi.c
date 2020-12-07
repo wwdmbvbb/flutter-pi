@@ -25,6 +25,7 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <stdatomic.h>
 #include <linux/input.h>
 
 #include <xf86drm.h>
@@ -314,6 +315,37 @@ static const GLubyte *hacked_glGetString(GLenum name) {
 	return extensions;
 }
 
+#define define_hacked_gl(name) \
+_Atomic unsigned int counter_##name; \
+static void hacked_glGen##name(GLsizei n, GLuint *arg) {\
+	glGen##name(n, arg); \
+	atomic_fetch_add(&counter_##name, n); \
+	printf("glGen" #name "(%lu).    live " #name ": %u\n", n, counter_##name); \
+} \
+static void hacked_glDelete##name(GLsizei n, const GLuint *arg) {\
+	glDelete##name(n, arg); \
+	atomic_fetch_sub(&counter_##name, n); \
+	printf("glDelete" #name "(%lu). live " #name ": %u\n", n, counter_##name); \
+}
+
+define_hacked_gl(Textures)
+define_hacked_gl(Buffers)
+//define_hacked_gl(VertexArrays)
+
+_Atomic unsigned int counter_shader;
+static GLuint hacked_glCreateShader(GLenum shader_type) {
+	GLuint shader = glCreateShader(shader_type);
+	atomic_fetch_add(&counter_shader, 1);
+	printf("glCreateShader(). live shaders: %u\n", counter_shader);
+	return shader;
+}
+
+static void hacked_glDeleteShader(GLuint shader) {
+	glDeleteShader(shader);
+	atomic_fetch_sub(&counter_shader, 1);
+	printf("glDeleteShader(). live shaders: %u\n", counter_shader);
+}
+
 /// Called by flutter 
 static void *proc_resolver(
 	void* userdata,
@@ -339,6 +371,23 @@ static void *proc_resolver(
 	// if we do, and the symbol to resolve is glGetString, we return our hacked_glGetString.
 	if (is_VC4 && (strcmp(name, "glGetString") == 0))
 		return hacked_glGetString;
+
+#define check_hacked_gl(hack_name) \
+	if (strcmp("glGen" #hack_name, name) == 0) \
+		return hacked_glGen##hack_name; \
+	\
+	if (strcmp("glDelete" #hack_name, name) == 0) \
+		return hacked_glDelete##hack_name;
+
+	check_hacked_gl(Textures)
+	check_hacked_gl(Buffers)
+	//check_hacked_gl(VertexArrays)
+
+	if (strcmp("glCreateShader", name) == 0) \
+		return hacked_glCreateShader; \
+	\
+	if (strcmp("glDeleteShader", name) == 0) \
+		return hacked_glDeleteShader;
 
 	if ((address = dlsym(RTLD_DEFAULT, name)) || (address = eglGetProcAddress(name)))
 		return address;
@@ -1447,7 +1496,15 @@ static int init_display(void) {
 	flutterpi.gbm.modifier = DRM_FORMAT_MOD_LINEAR;
 
 	flutterpi.gbm.surface = gbm_surface_create_with_modifiers(flutterpi.gbm.device, flutterpi.display.width, flutterpi.display.height, flutterpi.gbm.format, &flutterpi.gbm.modifier, 1);
-	if (flutterpi.gbm.surface == NULL) {
+	if ((flutterpi.gbm.surface == NULL) && (errno == ENOSYS)) {
+		flutterpi.gbm.surface = gbm_surface_create(
+			flutterpi.gbm.device,
+			flutterpi.display.width,
+			flutterpi.display.height,
+			flutterpi.gbm.format,
+			0
+		);
+	} else if (flutterpi.gbm.surface == NULL) {
 		perror("[flutter-pi] Could not create GBM Surface. gbm_surface_create_with_modifiers");
 		return errno;
 	}
