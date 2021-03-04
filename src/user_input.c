@@ -227,6 +227,8 @@ static void flush_pointer_events(struct user_input *input) {
     DEBUG_ASSERT(input != NULL);
 
     if (input->n_collected_flutter_pointer_events > 0) {
+        printf("Flushing %d pointer events...\n", input->n_collected_flutter_pointer_events);
+
         input->interface.on_flutter_pointer_event(
             input->userdata,
             input->collected_flutter_pointer_events,
@@ -793,8 +795,12 @@ static int on_touch_down(struct user_input *input, struct libinput_event *event)
     x = libinput_event_touch_get_x_transformed(touch_event, input->display_width - 1);
     y = libinput_event_touch_get_y_transformed(touch_event, input->display_height - 1);
 
+    printf("TOUCH DOWN:   slot %d, device_id: %" PRId64 ", display x: %04.0f, display y: %04.0f, ", slot, device_id, x, y);
+
     // transform the display coordinates to view (flutter) coordinates
     apply_flutter_transformation(input->display_to_view_transform, &x, &y);
+
+    printf("view x: %04.0f, view y: %04.0f, timestamp: %" PRIu64 "\n", x, y, timestamp);
 
     // emit the flutter pointer event
     emit_pointer_events(input, &FLUTTER_POINTER_TOUCH_DOWN_EVENT(timestamp, x, y, device_id), 1);
@@ -830,6 +836,16 @@ static int on_touch_up(struct user_input *input, struct libinput_event *event) {
 
     device_id = data->flutter_device_id_offset + slot;
 
+    printf(
+        "TOUCH UP:     "
+        "slot %d, device_id: %" PRId64 ", "
+        "display x:    -, display y:    -, view x: %04.0f, view y: %04.0f, "
+        "timestamp: %" PRIu64 "\n",
+        slot, device_id,
+        data->x, data->y,
+        timestamp
+    );
+
     emit_pointer_events(input, &FLUTTER_POINTER_TOUCH_UP_EVENT(timestamp, data->x, data->y, device_id), 1);
 
     return 0;
@@ -862,8 +878,12 @@ static int on_touch_motion(struct user_input *input, struct libinput_event *even
     x = libinput_event_touch_get_x_transformed(touch_event, input->display_width - 1);
     y = libinput_event_touch_get_y_transformed(touch_event, input->display_height - 1);
 
+    printf("TOUCH MOTION: slot %d, device_id: %" PRId64 ", display x: %04.0f, display y: %04.0f, ", slot, device_id, x, y);
+
     // transform the display coordinates to view (flutter) coordinates
     apply_flutter_transformation(input->display_to_view_transform, &x, &y);
+
+    printf("view x: %04.0f, view y: %04.0f, timestamp: %" PRIu64 "\n", x, y, timestamp);
 
     // emit the flutter pointer event
     emit_pointer_events(input, &FLUTTER_POINTER_TOUCH_MOVE_EVENT(timestamp, x, y, device_id), 1);
