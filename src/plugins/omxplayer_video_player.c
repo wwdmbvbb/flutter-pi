@@ -53,7 +53,7 @@ static struct {
 };
 
 /// Add a player instance to the player collection.
-int add_player(struct omxplayer_video_player *player) {
+static int add_player(struct omxplayer_video_player *player) {
     return cpset_put_(&omxpvidpp.players, player);
 }
 
@@ -186,10 +186,12 @@ static int on_mount(
 ) {
     struct omxplayer_video_player *player = userdata;
 
+    (void) view_id;
+    (void) req;
+
     if (zpos == 1) {
         zpos = -126;
     }
-
 
     struct aa_rect rect = get_aa_bounding_rect(params->rect);
 
@@ -217,6 +219,9 @@ static int on_unmount(
 ) {
     struct omxplayer_video_player *player = userdata;
 
+    (void) view_id;
+    (void) req;
+
     return cqueue_enqueue(
         &player->mgr->task_queue,
         &(struct omxplayer_mgr_task) {
@@ -240,6 +245,9 @@ static int on_update_view(
     void *userdata
 ) {
     struct omxplayer_video_player *player = userdata;
+
+    (void) view_id;
+    (void) req;
 
     if (zpos == 1) {
         zpos = -126;
@@ -291,12 +299,8 @@ static int get_dbus_property(
     void *ret_ptr
 ) {
     sd_bus_message *msg;
-    bool n_retries;
     int ok;
 
-    n_retries = 0;
-
-    retry:
     ok = sd_bus_call_method(
         bus,
         destination,
@@ -309,10 +313,7 @@ static int get_dbus_property(
         interface,
         member
     );
-    /*if ((ok < 0) && (strcmp(ret_error->name, SD_BUS_ERROR_UNKNOWN_METHOD) == 0) && (n_retries < 10)) {
-        n_retries++;
-        goto retry;
-    } else */if (ok < 0) {
+    if (ok < 0) {
         fprintf(stderr, "[omxplayer_video_player plugin] Could not read DBus property: %s, %s\n", ret_error->name, ret_error->message);
         return -ok;
     }
@@ -342,6 +343,8 @@ static int mgr_on_dbus_message(
     char *old_owner, *new_owner, *name;
     int ok;
 
+    (void) ret_error;
+
     task = userdata;
 
     sender = sd_bus_message_get_sender(m);
@@ -369,7 +372,6 @@ static void *mgr_entry(void *userdata) {
     struct omxplayer_mgr_task task;
     struct concurrent_queue *q;
     struct omxplayer_mgr *mgr;
-    struct timespec t_scheduled_pause;
     sd_bus_message *msg;
     sd_bus_error err;
     sd_bus_slot *slot;
@@ -377,12 +379,11 @@ static void *mgr_entry(void *userdata) {
     sd_bus *bus;
     pid_t omxplayer_pid;
     char dbus_name[256];
-    bool omxplayer_online;
     bool has_sent_initialized_event;
-    bool pause_on_end;
-    bool has_scheduled_pause_time;
     bool is_stream;
     int ok;
+
+    (void) current_orientation;
 
     mgr = userdata;
     q = &mgr->task_queue;
@@ -621,8 +622,6 @@ static void *mgr_entry(void *userdata) {
     platch_respond_success_std(task.responsehandle, &STDINT64(mgr->player->player_id));
 
     has_sent_initialized_event = false;
-    pause_on_end = is_stream ? false : true;
-    has_scheduled_pause_time = false;
     while (1) {
         ok = cqueue_dequeue(q, &task);
         
@@ -738,8 +737,6 @@ static void *mgr_entry(void *userdata) {
 
             platch_respond_success_std(task.responsehandle, NULL);
         } else if (task.type == kPause) {
-            has_scheduled_pause_time = false;
-
             ok = sd_bus_call_method(
                 bus,
                 dbus_name,
@@ -892,7 +889,6 @@ static void *mgr_entry(void *userdata) {
                 platch_respond_success_std(task.responsehandle, NULL);
             }
         } else if (task.type == kSetLooping) {
-            pause_on_end = false;
             platch_respond_success_std(task.responsehandle, NULL);
         } else if (task.type == kSetVolume) {
             ok = sd_bus_call_method(
@@ -944,8 +940,6 @@ static void *mgr_entry(void *userdata) {
     cqueue_deinit(&mgr->task_queue);
     free(mgr);
     mgr = NULL;
-
-    fail_return_ok:
     return (void*) EXIT_FAILURE;
 }
 
@@ -986,7 +980,6 @@ static int on_receive_evch(
     FlutterPlatformMessageResponseHandle *responsehandle
 ) {
     struct omxplayer_video_player *player;
-    int ok;
 
     player = get_player_by_evch(channel);
     if (player == NULL) {
@@ -1014,6 +1007,8 @@ static int on_initialize(
 ) {
     int ok;
 
+    (void) arg;
+
     ok = ensure_binding_initialized();
     if (ok != 0) {
         return respond_init_failed(responsehandle);
@@ -1034,6 +1029,10 @@ static int on_create(
     struct std_value *temp;
     char *asset, *uri, *package_name, *format_hint;
     int ok;
+
+    (void) source_type;
+    (void) package_name;
+    (void) format_hint;
 
     ok = ensure_binding_initialized();
     if (ok != 0) {
@@ -1465,6 +1464,8 @@ static int on_receive_mch(
     struct platch_obj *object,
     FlutterPlatformMessageResponseHandle *responsehandle
 ) {
+    (void) channel;
+
     if STREQ("init", object->method) {
         return on_initialize(&object->std_arg, responsehandle);
     } else if STREQ("create", object->method) {

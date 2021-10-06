@@ -521,7 +521,7 @@ struct texture *flutterpi_create_texture(
 
 const char *flutterpi_get_asset_bundle_path(
 	struct flutterpi *flutterpi
-)
+);
 
 int flutterpi_schedule_exit(void);
 
