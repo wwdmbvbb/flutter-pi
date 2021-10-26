@@ -424,7 +424,7 @@ static inline uint64_t get_monotonic_time(void) {
 
 #ifdef DEBUG
 #define DEBUG_ASSERT(__cond) assert(__cond)
-#define DEBUG_ASSERT_MSG(__cond, __msg) assert((__msg, (__cond))
+#define DEBUG_ASSERT_MSG(__cond, __msg) assert((__cond) && (__msg))
 #else
 #define DEBUG_ASSERT(__cond) do {} while (false)
 #define DEBUG_ASSERT_MSG(__cond, __msg) do {} while (false)
@@ -476,7 +476,7 @@ static inline int refcount_get_for_debug(refcount_t *refcount) {
 #define DECLARE_REF_OPS(obj_name) \
 struct obj_name *obj_name ## _ref(struct obj_name *obj); \
 void obj_name ## _unref(struct obj_name *obj); \
-void obj_name ## _unrefp(struct obj_name *obj); \
+void obj_name ## _unrefp(struct obj_name **obj); \
 
 #define DEFINE_REF_OPS(obj_name, refcount_member_name) \
 struct obj_name *obj_name ## _ref(struct obj_name *obj) { \

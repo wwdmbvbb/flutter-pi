@@ -35,6 +35,7 @@ message(STATUS "Generator .............. ${CMAKE_GENERATOR}")
 message(STATUS "Build Type ............. ${CMAKE_BUILD_TYPE}")
 
 OPTION(OMXPLAYER_SUPPORTS_RUNTIME_ROTATION "Whether omxplayer supports runtime rotation." OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(NOT FLUTTER_EMBEDDER_HEADER)
 
@@ -115,6 +116,7 @@ set(FLUTTER_PI_SRC
   src/keyboard.c
   src/user_input.c
   src/locales.c
+  src/event_loop.c
 	src/plugins/services.c
 )
 
